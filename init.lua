@@ -761,6 +761,7 @@ do
       if client and client:supports_method('textDocument/inlayHint', event.buf) then
         map('<leader>th', function() vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled { bufnr = event.buf }) end, '[T]oggle Inlay [H]ints')
       end
+      if vim.lsp.document_color then vim.lsp.document_color.enable(false, { bufnr = event.buf }) end
     end,
   })
 
