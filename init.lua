@@ -198,12 +198,15 @@ do
   vim.diagnostic.config {
     update_in_insert = false,
     severity_sort = true,
-    float = { border = 'rounded', source = 'if_many' },
+    float = {
+      border = 'rounded',
+      source = 'if_many',
+      wrap = true, -- Forces long diagnostic messages to wrap into a readable block
+    },
     underline = { severity = { min = vim.diagnostic.severity.WARN } },
 
-    -- Can switch between these as you prefer
-    virtual_text = true, -- Text shows up at the end of the line
-    virtual_lines = false, -- Text shows up underneath the line, with virtual lines
+    virtual_text = false,
+    virtual_lines = false,
 
     -- Auto open the float, so you can easily read the errors when jumping with `[d` and `]d`
     jump = {
@@ -217,6 +220,11 @@ do
     },
   }
 
+  -- Automatically open the wrapped floating diagnostic window on cursor hover
+  vim.o.updatetime = 300
+  vim.api.nvim_create_autocmd('CursorHold', {
+    callback = function() vim.diagnostic.open_float(nil, { focusable = false }) end,
+  })
   vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagnostic [Q]uickfix list' })
 
   -- Exit terminal mode in the builtin terminal with a shortcut that is a bit easier
@@ -443,6 +451,26 @@ do
   -- Like many other themes, this one has different styles, and you could load
   -- any other, such as 'tokyonight-storm', 'tokyonight-moon', or 'tokyonight-day'.
   vim.cmd.colorscheme 'onedark'
+
+  vim.pack.add {
+    'https://github.com/akinsho/bufferline.nvim',
+    'https://github.com/nvim-tree/nvim-web-devicons',
+  }
+
+  require('bufferline').setup {
+    options = {
+      mode = 'buffers',
+      separator_style = 'slant',
+      show_buffer_close_icons = true,
+      show_close_icon = true,
+    },
+  }
+
+  vim.pack.add { 'https://github.com/windwp/nvim-autopairs' }
+  require('nvim-autopairs').setup {}
+
+  vim.keymap.set('n', '<Tab>', '<cmd>BufferLineCycleNext<CR>', { desc = 'Bufferline: Next tab' })
+  vim.keymap.set('n', '<S-Tab>', '<cmd>BufferLineCyclePrev<CR>', { desc = 'Bufferline: Prev tab' })
 
   -- Highlight todo, notes, etc in comments
   vim.pack.add { gh 'folke/todo-comments.nvim' }
@@ -753,10 +781,27 @@ do
     -- rust_analyzer = {},
     --
     -- jack added lsps:
-    ruff = {},
     ts_ls = {},
     tailwindcss = {},
     gopls = {},
+    basedpyright = {
+      settings = {
+        basedpyright = {
+          analysis = {
+            autoSearchPaths = true,
+            diagnosticMode = 'openFilesOnly',
+            useLibraryCodeForTypes = true,
+            typeCheckingMode = 'standard', -- Change to 'strict' if you want harsher rules
+          },
+        },
+      },
+    },
+    ruff = {
+      on_attach = function(client)
+        -- Disable hover in favor of basedpyright to prevent duplicate popups
+        client.server_capabilities.hoverProvider = false
+      end,
+    },
 
     stylua = {}, -- Used to format Lua code
 
