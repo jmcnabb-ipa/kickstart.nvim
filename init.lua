@@ -171,6 +171,14 @@ do
   -- instead raise a dialog asking if you wish to save the current file(s)
   -- See `:help 'confirm'`
   vim.o.confirm = true
+
+  -- jack added tab and indent settings
+  vim.opt.tabstop = 4
+  vim.opt.shiftwidth = 4
+  vim.opt.softtabstop = 4
+  vim.opt.smartindent = true
+  vim.opt.autoindent = true
+  vim.cmd 'filetype plugin indent on'
 end
 
 -- ============================================================
@@ -423,18 +431,18 @@ do
   -- change the command under that to load whatever the name of that colorscheme is.
   --
   -- If you want to see what colorschemes are already installed, you can use `:Telescope colorscheme`.
-  vim.pack.add { gh 'folke/tokyonight.nvim' }
-  ---@diagnostic disable-next-line: missing-fields
-  require('tokyonight').setup {
-    styles = {
-      comments = { italic = false }, -- Disable italics in comments
-    },
+  -- Using vim.pack
+  vim.pack.add {
+    'https://github.com/navarasu/onedark.nvim',
   }
-
+  require('onedark').setup {
+    style = 'warmer',
+  }
+  require('onedark').load()
   -- Load the colorscheme here.
   -- Like many other themes, this one has different styles, and you could load
   -- any other, such as 'tokyonight-storm', 'tokyonight-moon', or 'tokyonight-day'.
-  vim.cmd.colorscheme 'tokyonight-night'
+  vim.cmd.colorscheme 'onedark'
 
   -- Highlight todo, notes, etc in comments
   vim.pack.add { gh 'folke/todo-comments.nvim' }
@@ -743,6 +751,12 @@ do
     --
     -- But for many setups, the LSP (`rust_analyzer`) will work just fine
     -- rust_analyzer = {},
+    --
+    -- jack added lsps:
+    ruff = {},
+    ts_ls = {},
+    tailwindcss = {},
+    gopls = {},
 
     stylua = {}, -- Used to format Lua code
 
@@ -793,7 +807,6 @@ do
   require('mason-lspconfig').setup {
     automatic_enable = false, -- Change this to true if you want to automatically enable servers that are installed manually (e.g. via :Mason / :MasonInstall)
   }
-
   -- Ensure the servers and tools above are installed
   --
   -- To check the current status of installed tools and/or manually install
@@ -804,6 +817,10 @@ do
   local ensure_installed = vim.tbl_keys(servers or {})
   vim.list_extend(ensure_installed, {
     -- You can add other tools here that you want Mason to install
+    -- jack added mason auto-install ensures:
+    'stylua',
+    'ruff',
+    'prettierd',
   })
 
   require('mason-tool-installer').setup { ensure_installed = ensure_installed }
@@ -811,6 +828,19 @@ do
   for name, server in pairs(servers) do
     vim.lsp.config(name, server)
     vim.lsp.enable(name)
+  end
+  -- jack added oxlint setup:
+  -- Modern Neovim 0.11+ Native LSP Setup for oxlint
+  if vim.fn.executable 'oxlint' == 1 then
+    -- Define the server's configuration parameters
+    vim.lsp.config('oxlint', {
+      cmd = { 'oxlint', '--lsp' },
+      -- You can add additional fields here like filetypes or root_markers if necessary
+    })
+    -- Explicitly activate the server
+    vim.lsp.enable 'oxlint'
+  else
+    vim.notify('oxlint binary not found. Please install it globally via npm or cargo.', vim.log.levels.WARN)
   end
 end
 
@@ -826,8 +856,13 @@ do
     format_on_save = function(bufnr)
       -- You can specify filetypes to autoformat on save here:
       local enabled_filetypes = {
-        -- lua = true,
-        -- python = true,
+        lua = true,
+        python = true,
+        typescript = true,
+        typescriptreact = true,
+        javascript = true,
+        javascriptreact = true,
+        go = true,
       }
       if enabled_filetypes[vim.bo[bufnr].filetype] then
         return { timeout_ms = 500 }
@@ -846,6 +881,15 @@ do
       --
       -- You can use 'stop_after_first' to run the first available formatter from the list
       -- javascript = { "prettierd", "prettier", stop_after_first = true },
+      -- jack added formatters:
+      lua = { 'stylua' },
+      python = { 'ruff_organize_imports', 'ruff_format' },
+      javascript = { 'oxfmt', 'prettierd', 'prettier', stop_after_first = true },
+      typescript = { 'oxfmt', 'prettierd', 'prettier', stop_after_first = true },
+      javascriptreact = { 'oxfmt', 'prettierd', 'prettier', stop_after_first = true },
+      typescriptreact = { 'oxfmt', 'prettierd', 'prettier', stop_after_first = true },
+      json = { 'oxfmt' },
+      go = { 'gofmt', 'goimports' },
     },
   }
 
@@ -896,7 +940,7 @@ do
       -- <c-k>: Toggle signature help
       --
       -- See `:help blink-cmp-config-keymap` for defining your own keymap
-      preset = 'default',
+      preset = 'enter',
 
       -- For more advanced Luasnip keymaps (e.g. selecting choice nodes, expansion) see:
       --    https://github.com/L3MON4D3/LuaSnip?tab=readme-ov-file#keymaps
@@ -1037,3 +1081,12 @@ end
 
 -- The line beneath this is called `modeline`. See `:help modeline`
 -- vim: ts=2 sts=2 sw=2 et
+
+-- Force wrap on all Markdown buffers regardless of what plugins try to do
+vim.api.nvim_create_autocmd({ 'BufEnter', 'BufWinEnter' }, {
+  pattern = { '*.md', '*.markdown' },
+  callback = function()
+    vim.opt_local.wrap = true
+    vim.opt_local.linebreak = true
+  end,
+})
