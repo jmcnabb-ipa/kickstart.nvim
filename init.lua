@@ -912,9 +912,10 @@ do
         javascript = true,
         javascriptreact = true,
         go = true,
+        json = true,
       }
       if enabled_filetypes[vim.bo[bufnr].filetype] then
-        return { timeout_ms = 500 }
+        return { timeout_ms = 1000 }
       else
         return nil
       end
@@ -933,10 +934,10 @@ do
       -- jack added formatters:
       lua = { 'stylua' },
       python = { 'ruff_organize_imports', 'ruff_format' },
-      javascript = { 'oxfmt', 'prettierd', 'prettier', stop_after_first = true },
-      typescript = { 'oxfmt', 'prettierd', 'prettier', stop_after_first = true },
-      javascriptreact = { 'oxfmt', 'prettierd', 'prettier', stop_after_first = true },
-      typescriptreact = { 'oxfmt', 'prettierd', 'prettier', stop_after_first = true },
+      javascript = { 'oxfmt', 'prettier' },
+      typescript = { 'oxfmt', 'prettier' },
+      javascriptreact = { 'oxfmt', 'prettier' },
+      typescriptreact = { 'oxfmt', 'prettier' },
       json = { 'oxfmt' },
       go = { 'gofmt', 'goimports' },
     },
