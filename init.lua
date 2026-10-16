@@ -452,6 +452,9 @@ do
   -- any other, such as 'tokyonight-storm', 'tokyonight-moon', or 'tokyonight-day'.
   vim.cmd.colorscheme 'onedark'
 
+  vim.pack.add { gh 'petertriho/nvim-scrollbar' }
+  require('scrollbar').setup()
+
   vim.pack.add {
     'https://github.com/akinsho/bufferline.nvim',
     'https://github.com/nvim-tree/nvim-web-devicons',
