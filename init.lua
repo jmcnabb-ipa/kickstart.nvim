@@ -460,6 +460,14 @@ do
     'https://github.com/nvim-tree/nvim-web-devicons',
   }
 
+  vim.pack.add { gh 'OXY2DEV/markview.nvim' }
+  require('markview').setup {
+    preview = {
+      icon_provider = 'devicons',
+      filetypes = { 'markdown' },
+    },
+  }
+
   require('bufferline').setup {
     options = {
       mode = 'buffers',
@@ -1112,7 +1120,7 @@ do
   -- require 'kickstart.plugins.indent_line'
   -- require 'kickstart.plugins.lint'
   -- require 'kickstart.plugins.autopairs'
-  -- require 'kickstart.plugins.neo-tree'
+  require 'kickstart.plugins.neo-tree'
 
   -- NOTE: You can add your own plugins, configuration, etc. in `lua/custom/plugins/*.lua`.
   --
