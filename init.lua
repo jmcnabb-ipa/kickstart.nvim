@@ -172,7 +172,7 @@ do
   -- See `:help 'confirm'`
   vim.o.confirm = true
 
-  -- jack added tab and indent settings
+  -- j added tab and indent settings
   vim.opt.tabstop = 4
   vim.opt.shiftwidth = 4
   vim.opt.softtabstop = 4
@@ -792,7 +792,7 @@ do
     -- But for many setups, the LSP (`rust_analyzer`) will work just fine
     -- rust_analyzer = {},
     --
-    -- jack added lsps:
+    -- j added lsps:
     ts_ls = {},
     tailwindcss = {},
     gopls = {},
@@ -874,10 +874,11 @@ do
   local ensure_installed = vim.tbl_keys(servers or {})
   vim.list_extend(ensure_installed, {
     -- You can add other tools here that you want Mason to install
-    -- jack added mason auto-install ensures:
+    -- j added mason auto-install ensures:
     'stylua',
     'ruff',
     'prettierd',
+    'eslint-lsp',
   })
 
   require('mason-tool-installer').setup { ensure_installed = ensure_installed }
@@ -886,7 +887,34 @@ do
     vim.lsp.config(name, server)
     vim.lsp.enable(name)
   end
-  -- jack added oxlint setup:
+  -- j added eslint shortcut to sort props alphabetically (<leader>es)
+  -- Modern Neovim Native LSP Setup for eslint
+  vim.lsp.config('eslint', {
+    cmd = { 'vscode-eslint-language-server', '--stdio' },
+    filetypes = { 'javascript', 'javascriptreact', 'typescript', 'typescriptreact' },
+    -- 1. Tell the server to prepare auto-fixing capabilities
+    settings = {
+      codeActionOnSave = {
+        enable = true,
+        mode = 'all',
+      },
+    },
+  })
+  vim.lsp.enable 'eslint'
+
+  -- 2. Create a manual keymap to sort props/fix all on demand
+  vim.keymap.set(
+    'n',
+    '<leader>es',
+    function()
+      vim.lsp.buf.code_action {
+        context = { only = { 'source.fixAll.eslint' } },
+        apply = true,
+      }
+    end,
+    { desc = '[E]SLint [S]ort / Fix JSX Props' }
+  )
+  -- j added oxlint setup:
   -- Modern Neovim 0.11+ Native LSP Setup for oxlint
   if vim.fn.executable 'oxlint' == 1 then
     -- Define the server's configuration parameters
@@ -939,7 +967,7 @@ do
       --
       -- You can use 'stop_after_first' to run the first available formatter from the list
       -- javascript = { "prettierd", "prettier", stop_after_first = true },
-      -- jack added formatters:
+      -- j added formatters:
       lua = { 'stylua' },
       python = { 'ruff_organize_imports', 'ruff_format' },
       javascript = { 'oxfmt', 'prettier' },
