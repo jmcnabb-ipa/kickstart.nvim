@@ -460,11 +460,13 @@ do
     'https://github.com/nvim-tree/nvim-web-devicons',
   }
 
-  vim.pack.add { gh 'OXY2DEV/markview.nvim' }
-  require('markview').setup {
-    preview = {
-      icon_provider = 'devicons',
-      filetypes = { 'markdown' },
+  vim.pack.add { gh 'MeanderingProgrammer/render-markdown.nvim' }
+  require('render-markdown').setup {
+    ft = { 'markdown', 'quarto', 'gitcommit', 'avail' },
+    opts = {
+      heading = {
+        sign = false,
+      },
     },
   }
 
