@@ -795,6 +795,8 @@ do
     -- rust_analyzer = {},
     --
     -- j added lsps:
+    djls = {},
+    djlsp = {},
     ts_ls = {},
     tailwindcss = {},
     gopls = {},
@@ -879,7 +881,6 @@ do
     -- j added mason auto-install ensures:
     'stylua',
     'ruff',
-    'prettierd',
     'eslint-lsp',
   })
 
@@ -972,10 +973,10 @@ do
       -- j added formatters:
       lua = { 'stylua' },
       python = { 'ruff_organize_imports', 'ruff_format' },
-      javascript = { 'oxfmt', 'prettier' },
-      typescript = { 'oxfmt', 'prettier' },
-      javascriptreact = { 'oxfmt', 'prettier' },
-      typescriptreact = { 'oxfmt', 'prettier' },
+      javascript = { 'oxfmt' },
+      typescript = { 'oxfmt' },
+      javascriptreact = { 'oxfmt' },
+      typescriptreact = { 'oxfmt' },
       json = { 'oxfmt' },
       go = { 'gofmt', 'goimports' },
     },
