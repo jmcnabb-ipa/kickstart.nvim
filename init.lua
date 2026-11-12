@@ -485,6 +485,9 @@ do
   vim.keymap.set('n', '<Tab>', '<cmd>BufferLineCycleNext<CR>', { desc = 'Bufferline: Next tab' })
   vim.keymap.set('n', '<S-Tab>', '<cmd>BufferLineCyclePrev<CR>', { desc = 'Bufferline: Prev tab' })
 
+  -- j added vim-fugitive
+  vim.pack.add { gh 'tpope/vim-fugitive' }
+
   -- Highlight todo, notes, etc in comments
   vim.pack.add { gh 'folke/todo-comments.nvim' }
   require('todo-comments').setup { signs = false }
@@ -800,6 +803,7 @@ do
     ts_ls = {},
     tailwindcss = {},
     gopls = {},
+    golangci_lint_ls = {},
     basedpyright = {
       settings = {
         basedpyright = {
