@@ -890,7 +890,8 @@ do
     -- j added mason auto-install ensures:
     'stylua',
     'ruff',
-    'eslint-lsp',
+    'oxlint',
+    'oxfmt',
   })
 
   require('mason-tool-installer').setup { ensure_installed = ensure_installed }
@@ -899,73 +900,59 @@ do
     vim.lsp.config(name, server)
     vim.lsp.enable(name)
   end
-
-  -- j added eslint pkgs local to neovim so that can have linter warn of unsorted jsx props even if project doesn't use eslint
-  -- to update in case of new features or something, run:
-  -- pnpm --dir ~/.config/nvim/eslint update --latest
-  local eslint_dir = vim.fn.stdpath 'config' .. '/eslint'
-
-  vim.lsp.config('eslint', {
-    cmd = { 'vscode-eslint-language-server', '--stdio' },
-    filetypes = { 'javascript', 'javascriptreact', 'typescript', 'typescriptreact' },
-    settings = {
-      nodePath = eslint_dir .. '/node_modules',
-      options = { overrideConfigFile = eslint_dir .. '/eslint.config.mjs' },
-    },
-  })
-  vim.lsp.enable 'eslint'
-
-  -- Keep your new Tree-sitter <leader>es sorter right below this
-  -- j added treesitter shortcut to sort props alphabetically (<leader>es)
-  -- Sort all JSX props in the current file (<leader>es)
-  vim.keymap.set('n', '<leader>es', function()
-    local bufnr = vim.api.nvim_get_current_buf()
-    local ok, parser = pcall(vim.treesitter.get_parser, bufnr)
-    if not ok or not parser then return end
-
-    local query = vim.treesitter.query.parse(parser:lang(), '[(jsx_opening_element) (jsx_self_closing_element)] @tag')
-    local edits = {}
-
-    for _, tree in ipairs(parser:parse()) do
-      for _, tag in query:iter_captures(tree:root(), bufnr, 0, -1) do
-        local attrs = {}
-        for child in tag:iter_children() do
-          if child:type() == 'jsx_attribute' then
-            local sr, sc, er, ec = child:range()
-            local text = vim.treesitter.get_node_text(child, bufnr)
-            table.insert(attrs, { sr = sr, sc = sc, er = er, ec = ec, text = text, key = text:match('^[^=]+'):lower() })
-          end
-        end
-
-        local sorted = vim.list_extend({}, attrs)
-        table.sort(sorted, function(a, b) return a.key < b.key end)
-
-        for i, orig in ipairs(attrs) do
-          if orig.text ~= sorted[i].text then
-            table.insert(edits, {
-              range = { start = { line = orig.sr, character = orig.sc }, ['end'] = { line = orig.er, character = orig.ec } },
-              newText = sorted[i].text,
-            })
-          end
-        end
-      end
-    end
-
-    if #edits > 0 then vim.lsp.util.apply_text_edits(edits, bufnr, 'utf-16') end
-  end, { desc = '[E]lement [S]ort JSX Props' })
 end
 
 -- ============================================================
--- SECTION 7: FORMATTING
--- conform.nvim setup and keymap
+-- SECTION 7: LINTING (OXLINT) & FORMATTING (CONFORM / OXFMT)
 -- ============================================================
 do
-  -- [[ Formatting ]]
+  -- 1. Configure oxlint LSP (uses Mason binary + safely checks root or ./frontend/)
+  vim.lsp.config('oxlint', {
+    before_init = function(_, config)
+      local root = config.root_dir or vim.fn.getcwd()
+      local settings = {}
+
+      -- Check ./frontend/ for oxlint config only if not already at the root
+      if not vim.uv.fs_stat(root .. '/oxlint.config.ts') and not vim.uv.fs_stat(root .. '/.oxlintrc.json') then
+        if vim.uv.fs_stat(root .. '/frontend/oxlint.config.ts') then
+          settings['oxc.configPath'] = './frontend/oxlint.config.ts'
+        elseif vim.uv.fs_stat(root .. '/frontend/.oxlintrc.json') then
+          settings['oxc.configPath'] = './frontend/.oxlintrc.json'
+        end
+      end
+
+      -- Check ./frontend/ for tsgolint binary
+      if vim.uv.fs_stat(root .. '/frontend/node_modules/.bin/tsgolint') then settings['oxc.path.tsgolint'] = './frontend/node_modules/.bin/tsgolint' end
+
+      if not vim.tbl_isempty(settings) then config.settings = vim.tbl_deep_extend('force', config.settings or {}, settings) end
+    end,
+  })
+  vim.lsp.enable 'oxlint'
+
+  -- 2. Auto-fix oxlint rules (including JSX prop sorting) BEFORE conform formats
+  vim.api.nvim_create_autocmd('BufWritePre', {
+    group = vim.api.nvim_create_augroup('OxlintFixAll', { clear = true }),
+    pattern = { '*.js', '*.jsx', '*.ts', '*.tsx' },
+    callback = function(args)
+      if #vim.lsp.get_clients { bufnr = args.buf, name = 'oxlint' } == 0 then return end
+
+      local params = vim.lsp.util.make_range_params(0, 'utf-16')
+      params.context = { only = { 'source.fixAll.oxc' }, diagnostics = {} }
+
+      local result = vim.lsp.buf_request_sync(args.buf, 'textDocument/codeAction', params, 1000)
+      for _, res in pairs(result or {}) do
+        for _, action in ipairs(res.result or {}) do
+          if action.edit then vim.lsp.util.apply_workspace_edit(action.edit, 'utf-16') end
+        end
+      end
+    end,
+  })
+
+  -- 3. Configure conform.nvim (runs immediately after OxlintFixAll on save)
   vim.pack.add { gh 'stevearc/conform.nvim' }
   require('conform').setup {
     notify_on_error = false,
     format_on_save = function(bufnr)
-      -- You can specify filetypes to autoformat on save here:
       local enabled_filetypes = {
         lua = true,
         python = true,
@@ -983,17 +970,9 @@ do
       end
     end,
     default_format_opts = {
-      lsp_format = 'fallback', -- Use external formatters if configured below, otherwise use LSP formatting. Set to `false` to disable LSP formatting entirely.
+      lsp_format = 'fallback',
     },
-    -- You can also specify external formatters in here.
     formatters_by_ft = {
-      -- rust = { 'rustfmt' },
-      -- Conform can also run multiple formatters sequentially
-      -- python = { "isort", "black" },
-      --
-      -- You can use 'stop_after_first' to run the first available formatter from the list
-      -- javascript = { "prettierd", "prettier", stop_after_first = true },
-      -- j added formatters:
       lua = { 'stylua' },
       python = { 'ruff_organize_imports', 'ruff_format' },
       javascript = { 'oxfmt' },
@@ -1003,11 +982,22 @@ do
       json = { 'oxfmt' },
       go = { 'gofmt', 'goimports' },
     },
+    formatters = {
+      oxfmt = {
+        prepend_args = function(_, ctx)
+          local root = vim.fs.root(ctx.dirname, { '.git' }) or ctx.dirname
+          for _, name in ipairs { 'oxfmt.config.ts', '.oxfmtrc.json', '.oxfmtrc.jsonc' } do
+            if vim.uv.fs_stat(root .. '/' .. name) then return {} end
+            if vim.uv.fs_stat(root .. '/frontend/' .. name) then return { '--config', root .. '/frontend/' .. name } end
+          end
+          return {}
+        end,
+      },
+    },
   }
 
   vim.keymap.set({ 'n', 'v' }, '<leader>f', function() require('conform').format { async = true } end, { desc = '[F]ormat buffer' })
 end
-
 -- ============================================================
 -- SECTION 8: AUTOCOMPLETE & SNIPPETS
 -- blink.cmp and luasnip setup
