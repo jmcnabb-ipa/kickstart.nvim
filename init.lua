@@ -899,46 +899,60 @@ do
     vim.lsp.config(name, server)
     vim.lsp.enable(name)
   end
-  -- j added eslint shortcut to sort props alphabetically (<leader>es)
-  -- Modern Neovim Native LSP Setup for eslint
+
+  -- j added eslint pkgs local to neovim so that can have linter warn of unsorted jsx props even if project doesn't use eslint
+  -- to update in case of new features or something, run:
+  -- pnpm --dir ~/.config/nvim/eslint update --latest
+  local eslint_dir = vim.fn.stdpath 'config' .. '/eslint'
+
   vim.lsp.config('eslint', {
     cmd = { 'vscode-eslint-language-server', '--stdio' },
     filetypes = { 'javascript', 'javascriptreact', 'typescript', 'typescriptreact' },
-    -- 1. Tell the server to prepare auto-fixing capabilities
     settings = {
-      codeActionOnSave = {
-        enable = true,
-        mode = 'all',
-      },
+      nodePath = eslint_dir .. '/node_modules',
+      options = { overrideConfigFile = eslint_dir .. '/eslint.config.mjs' },
     },
   })
   vim.lsp.enable 'eslint'
 
-  -- 2. Create a manual keymap to sort props/fix all on demand
-  vim.keymap.set(
-    'n',
-    '<leader>es',
-    function()
-      vim.lsp.buf.code_action {
-        context = { only = { 'source.fixAll.eslint' } },
-        apply = true,
-      }
-    end,
-    { desc = '[E]SLint [S]ort / Fix JSX Props' }
-  )
-  -- j added oxlint setup:
-  -- Modern Neovim 0.11+ Native LSP Setup for oxlint
-  if vim.fn.executable 'oxlint' == 1 then
-    -- Define the server's configuration parameters
-    vim.lsp.config('oxlint', {
-      cmd = { 'oxlint', '--lsp' },
-      -- You can add additional fields here like filetypes or root_markers if necessary
-    })
-    -- Explicitly activate the server
-    vim.lsp.enable 'oxlint'
-  else
-    vim.notify('oxlint binary not found. Please install it globally via npm or cargo.', vim.log.levels.WARN)
-  end
+  -- Keep your new Tree-sitter <leader>es sorter right below this
+  -- j added treesitter shortcut to sort props alphabetically (<leader>es)
+  -- Sort all JSX props in the current file (<leader>es)
+  vim.keymap.set('n', '<leader>es', function()
+    local bufnr = vim.api.nvim_get_current_buf()
+    local ok, parser = pcall(vim.treesitter.get_parser, bufnr)
+    if not ok or not parser then return end
+
+    local query = vim.treesitter.query.parse(parser:lang(), '[(jsx_opening_element) (jsx_self_closing_element)] @tag')
+    local edits = {}
+
+    for _, tree in ipairs(parser:parse()) do
+      for _, tag in query:iter_captures(tree:root(), bufnr, 0, -1) do
+        local attrs = {}
+        for child in tag:iter_children() do
+          if child:type() == 'jsx_attribute' then
+            local sr, sc, er, ec = child:range()
+            local text = vim.treesitter.get_node_text(child, bufnr)
+            table.insert(attrs, { sr = sr, sc = sc, er = er, ec = ec, text = text, key = text:match('^[^=]+'):lower() })
+          end
+        end
+
+        local sorted = vim.list_extend({}, attrs)
+        table.sort(sorted, function(a, b) return a.key < b.key end)
+
+        for i, orig in ipairs(attrs) do
+          if orig.text ~= sorted[i].text then
+            table.insert(edits, {
+              range = { start = { line = orig.sr, character = orig.sc }, ['end'] = { line = orig.er, character = orig.ec } },
+              newText = sorted[i].text,
+            })
+          end
+        end
+      end
+    end
+
+    if #edits > 0 then vim.lsp.util.apply_text_edits(edits, bufnr, 'utf-16') end
+  end, { desc = '[E]lement [S]ort JSX Props' })
 end
 
 -- ============================================================
