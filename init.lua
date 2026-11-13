@@ -488,6 +488,11 @@ do
   -- j added vim-fugitive
   vim.pack.add { gh 'tpope/vim-fugitive' }
 
+  -- j added lazygit
+  vim.pack.add { gh 'kdheepak/lazygit.nvim' }
+  vim.keymap.set('n', '<leader>lg', '<cmd>LazyGit<cr>', { desc = 'Open LazyGit' })
+  vim.keymap.set('n', '<leader>gf', '<cmd>LazyGitFilterCurrentFile<cr>', { desc = 'LazyGit File History' })
+
   -- Highlight todo, notes, etc in comments
   vim.pack.add { gh 'folke/todo-comments.nvim' }
   require('todo-comments').setup { signs = false }
