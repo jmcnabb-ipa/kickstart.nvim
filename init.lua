@@ -906,13 +906,109 @@ end
 -- SECTION 7: LINTING (OXLINT) & FORMATTING (CONFORM / OXFMT)
 -- ============================================================
 do
-  -- 1. Configure oxlint LSP (uses Mason binary + safely checks root or ./frontend/)
+  -- 1. Fallback JSX prop sorter via Treesitter (works in EVERY repo, zero config needed)
+  local function sort_jsx_props(bufnr)
+    bufnr = bufnr or vim.api.nvim_get_current_buf()
+    local ft = vim.bo[bufnr].filetype
+    if ft ~= 'javascriptreact' and ft ~= 'typescriptreact' and ft ~= 'javascript' and ft ~= 'typescript' then return end
+
+    local ok, parser = pcall(vim.treesitter.get_parser, bufnr)
+    if not ok or not parser then return end
+
+    local trees = parser:parse()
+    if not trees or not trees[1] then return end
+
+    local query = vim.treesitter.query.parse(
+      parser:lang(),
+      [[
+      (jsx_opening_element) @tag
+      (jsx_self_closing_element) @tag
+    ]]
+    )
+
+    local edits = {}
+
+    for _, node in query:iter_captures(trees[1]:root(), bufnr, 0, -1) do
+      -- Group props split by {...spread} so spread prop overrides stay safe
+      local groups = { {} }
+      for child in node:iter_children() do
+        local ctype = child:type()
+        if ctype == 'jsx_attribute' then
+          table.insert(groups[#groups], child)
+        elseif ctype == 'jsx_expression' then
+          table.insert(groups, {})
+        end
+      end
+
+      for _, attrs in ipairs(groups) do
+        if #attrs > 1 then
+          local items = {}
+          for _, attr in ipairs(attrs) do
+            local name_node = attr:field('name')[1] or attr:child(0)
+            local name = vim.treesitter.get_node_text(name_node, bufnr)
+            local text = vim.treesitter.get_node_text(attr, bufnr)
+            local sr, sc, er, ec = attr:range()
+            table.insert(items, { name = name, text = text, sr = sr, sc = sc, er = er, ec = ec })
+          end
+
+          local sorted = vim.list_extend({}, items)
+          table.sort(sorted, function(a, b) return a.name:lower() < b.name:lower() end)
+
+          for i = 1, #items do
+            if items[i].text ~= sorted[i].text then
+              table.insert(edits, {
+                range = {
+                  start = { line = items[i].sr, character = items[i].sc },
+                  ['end'] = { line = items[i].er, character = items[i].ec },
+                },
+                newText = sorted[i].text,
+              })
+            end
+          end
+        end
+      end
+    end
+
+    if #edits > 0 then vim.lsp.util.apply_text_edits(edits, bufnr, 'utf-8') end
+  end
+
+  -- 2. Run oxlint fix-all (when attached) + guaranteed JSX prop sort
+  local function fix_and_sort_jsx(bufnr)
+    bufnr = bufnr or vim.api.nvim_get_current_buf()
+
+    if #vim.lsp.get_clients { bufnr = bufnr, name = 'oxlint' } > 0 then
+      local last_line = vim.api.nvim_buf_line_count(bufnr) - 1
+      local last_col = #(vim.api.nvim_buf_get_lines(bufnr, last_line, last_line + 1, false)[1] or '')
+      local params = {
+        textDocument = vim.lsp.util.make_text_document_params(bufnr),
+        range = {
+          start = { line = 0, character = 0 },
+          ['end'] = { line = last_line, character = last_col },
+        },
+        context = { only = { 'source.fixAll.oxc' }, diagnostics = {} },
+      }
+
+      local result = vim.lsp.buf_request_sync(bufnr, 'textDocument/codeAction', params, 1000)
+      for _, res in pairs(result or {}) do
+        for _, action in ipairs(res.result or {}) do
+          if action.edit then vim.lsp.util.apply_workspace_edit(action.edit, 'utf-16') end
+        end
+      end
+    end
+
+    -- Always enforce JSX prop sorting even if oxlint didn't attach or lacked the rule
+    sort_jsx_props(bufnr)
+  end
+
+  -- 3. Configure oxlint LSP (uses Mason binary + safely checks root or ./frontend/)
   vim.lsp.config('oxlint', {
+    init_options = {
+      fixKind = 'all',
+    },
     before_init = function(_, config)
       local root = config.root_dir or vim.fn.getcwd()
       local settings = {}
 
-      -- Check ./frontend/ for oxlint config only if not already at the root
       if not vim.uv.fs_stat(root .. '/oxlint.config.ts') and not vim.uv.fs_stat(root .. '/.oxlintrc.json') then
         if vim.uv.fs_stat(root .. '/frontend/oxlint.config.ts') then
           settings['oxc.configPath'] = './frontend/oxlint.config.ts'
@@ -921,7 +1017,6 @@ do
         end
       end
 
-      -- Check ./frontend/ for tsgolint binary
       if vim.uv.fs_stat(root .. '/frontend/node_modules/.bin/tsgolint') then settings['oxc.path.tsgolint'] = './frontend/node_modules/.bin/tsgolint' end
 
       if not vim.tbl_isempty(settings) then config.settings = vim.tbl_deep_extend('force', config.settings or {}, settings) end
@@ -929,26 +1024,14 @@ do
   })
   vim.lsp.enable 'oxlint'
 
-  -- 2. Auto-fix oxlint rules (including JSX prop sorting) BEFORE conform formats
+  -- 4. Auto-fix oxlint rules + sort JSX props BEFORE conform formats
   vim.api.nvim_create_autocmd('BufWritePre', {
     group = vim.api.nvim_create_augroup('OxlintFixAll', { clear = true }),
     pattern = { '*.js', '*.jsx', '*.ts', '*.tsx' },
-    callback = function(args)
-      if #vim.lsp.get_clients { bufnr = args.buf, name = 'oxlint' } == 0 then return end
-
-      local params = vim.lsp.util.make_range_params(0, 'utf-16')
-      params.context = { only = { 'source.fixAll.oxc' }, diagnostics = {} }
-
-      local result = vim.lsp.buf_request_sync(args.buf, 'textDocument/codeAction', params, 1000)
-      for _, res in pairs(result or {}) do
-        for _, action in ipairs(res.result or {}) do
-          if action.edit then vim.lsp.util.apply_workspace_edit(action.edit, 'utf-16') end
-        end
-      end
-    end,
+    callback = function(args) fix_and_sort_jsx(args.buf) end,
   })
 
-  -- 3. Configure conform.nvim (runs immediately after OxlintFixAll on save)
+  -- 5. Configure conform.nvim (runs immediately after OxlintFixAll on save)
   vim.pack.add { gh 'stevearc/conform.nvim' }
   require('conform').setup {
     notify_on_error = false,
@@ -996,7 +1079,11 @@ do
     },
   }
 
-  vim.keymap.set({ 'n', 'v' }, '<leader>f', function() require('conform').format { async = true } end, { desc = '[F]ormat buffer' })
+  -- 6. Manual shortcut: runs oxlint fix + JSX prop sort + oxfmt
+  vim.keymap.set({ 'n', 'v' }, '<leader>f', function()
+    fix_and_sort_jsx(vim.api.nvim_get_current_buf())
+    require('conform').format { async = true }
+  end, { desc = '[F]ormat and sort buffer' })
 end
 -- ============================================================
 -- SECTION 8: AUTOCOMPLETE & SNIPPETS
