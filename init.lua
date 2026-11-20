@@ -462,13 +462,98 @@ do
 
   vim.pack.add { gh 'MeanderingProgrammer/render-markdown.nvim' }
   require('render-markdown').setup {
-    ft = { 'markdown', 'quarto', 'gitcommit', 'avail' },
-    opts = {
-      heading = {
-        sign = false,
-      },
+    sign = {
+      enabled = false,
+    },
+    heading = {
+      sign = false,
+      position = 'inline',
+      icons = { '# ', '## ', '### ', '#### ', '##### ', '###### ' },
+      backgrounds = {},
+    },
+    code = {
+      sign = false,
+      style = 'normal',
+      width = 'block',
+      left_pad = 2, -- Matches "margin": 2 on code_block
+      right_pad = 2,
+      border = 'none',
+    },
+    bullet = {
+      icons = { '•' }, -- Matches "item.block_prefix": "• "
+    },
+    checkbox = {
+      unchecked = { icon = '[ ] ' }, -- Matches "task.unticked"
+      checked = { icon = '[✓] ' }, -- Matches "task.ticked"
+    },
+    quote = {
+      icon = '│', -- Matches "block_quote.indent_token"
+    },
+    dash = {
+      icon = '─',
+      width = 40, -- Matches your 40-character "hr.format"
+    },
+    pipe_table = {
+      preset = 'none', -- Uses standard ┼, │, ─ box characters from your JSON
+    },
+    link = {
+      enabled = false, -- Keeps links as clean underlined text without Nerd Font icons
     },
   }
+
+  local function apply_glamour_highlights()
+    local set = vim.api.nvim_set_hl
+
+    -- Headings: override both RenderMarkdown and Treesitter @markup groups
+    local headings = {
+      { level = 1, fg = '#61afef', bold = true },
+      { level = 2, fg = '#c678dd', bold = true },
+      { level = 3, fg = '#56b6c2', bold = true },
+      { level = 4, fg = '#98c379', bold = true },
+      { level = 5, fg = '#abb2bf', bold = true },
+      { level = 6, fg = '#7f848e', bold = false },
+    }
+
+    for _, h in ipairs(headings) do
+      local opts = { fg = h.fg, bold = h.bold }
+      set(0, 'RenderMarkdownH' .. h.level, opts)
+      set(0, 'RenderMarkdownH' .. h.level .. 'Bg', { bg = 'NONE' })
+      set(0, '@markup.heading.' .. h.level .. '.markdown', opts)
+      set(0, '@markup.heading.' .. h.level .. '.marker.markdown', opts)
+    end
+    set(0, '@markup.heading', { fg = '#61afef', bold = true })
+
+    -- Stop fenced code blocks from inheriting green string styling
+    set(0, '@markup.raw.block.markdown', { fg = '#abb2bf' })
+    set(0, 'RenderMarkdownCode', { bg = '#29292d' })
+    set(0, 'RenderMarkdownCodeBorder', { bg = '#29292d' })
+    set(0, 'RenderMarkdownCodeFallback', { fg = '#abb2bf' })
+
+    -- Inline code (`code`)
+    set(0, '@markup.raw.markdown_inline', { fg = '#e5c07b', bg = '#2b2b30' })
+    set(0, 'RenderMarkdownCodeInline', { fg = '#e5c07b', bg = '#2b2b30' })
+
+    -- Other Markdown elements
+    set(0, 'RenderMarkdownQuote', { fg = '#7f848e', italic = true })
+    set(0, '@markup.quote.markdown', { fg = '#7f848e', italic = true })
+    set(0, 'RenderMarkdownDash', { fg = '#3e4451' })
+    set(0, 'RenderMarkdownBullet', { fg = '#abb2bf' })
+    set(0, 'RenderMarkdownUnchecked', { fg = '#abb2bf' })
+    set(0, 'RenderMarkdownChecked', { fg = '#98c379' })
+    set(0, '@markup.list.markdown', { fg = '#61afef' })
+    set(0, '@markup.italic.markdown_inline', { fg = '#c678dd', italic = true })
+    set(0, '@markup.strong.markdown_inline', { fg = '#d7dae0', bold = true })
+    set(0, '@markup.strikethrough.markdown_inline', { fg = '#5c6370', strikethrough = true })
+    set(0, '@markup.link.label.markdown_inline', { fg = '#61afef', underline = true })
+    set(0, '@markup.link.url.markdown_inline', { fg = '#61afef', underline = true })
+  end
+
+  apply_glamour_highlights()
+  vim.api.nvim_create_autocmd({ 'ColorScheme', 'VimEnter', 'FileType' }, {
+    callback = function(ev)
+      if ev.event ~= 'FileType' or ev.match == 'markdown' then apply_glamour_highlights() end
+    end,
+  })
 
   require('bufferline').setup {
     options = {
@@ -1185,7 +1270,27 @@ do
   vim.pack.add { { src = gh 'nvim-treesitter/nvim-treesitter', version = 'main' } }
 
   -- Ensure basic parsers are installed
-  local parsers = { 'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc' }
+  local parsers = {
+    'bash',
+    'c',
+    'css',
+    'diff',
+    'go',
+    'html',
+    'javascript',
+    'json',
+    'lua',
+    'luadoc',
+    'markdown',
+    'markdown_inline',
+    'python',
+    'query',
+    'tsx',
+    'typescript',
+    'vim',
+    'vimdoc',
+    'yaml',
+  }
   require('nvim-treesitter').install(parsers)
 
   ---@param buf integer
