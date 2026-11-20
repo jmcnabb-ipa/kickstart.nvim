@@ -892,7 +892,9 @@ do
     djlsp = {},
     ts_ls = {},
     tailwindcss = {},
-    gopls = {},
+    gopls = {
+      completeUnimported = true,
+    },
     golangci_lint_ls = {},
     basedpyright = {
       settings = {
